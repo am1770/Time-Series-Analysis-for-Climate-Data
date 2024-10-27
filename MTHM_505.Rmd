@@ -1,0 +1,1084 @@
+---
+title: "MTHM_505"
+author: "Adil Mohammad(730008548)"
+date: "2024-04-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+# 1
+
+```{r}
+library(geoR)
+library(viridis)
+library(sp)
+library(ggplot2)
+```
+
+# 1)a)
+
+```{r}
+Netherlands <- read.csv("D:/ADIL/Downloads/data/netherlands.csv")
+head(Netherlands)
+```
+
+```{r}
+summary(Netherlands)
+```
+
+```{r}
+Netherlands_df <- as.geodata(Netherlands,coords.col = 2:3,data.col = 4)
+```
+
+```{r}
+plot.geodata(Netherlands_df, coords = Netherlands_df$coords, data = Netherlands_df$data,)
+```
+
+**comment**
+
+-   The top right scatter plot shows the different shapes and colors likely represent different categories or groups within the data.
+-   This histogram displays the frequency distribution of the data values themselves.
+-   The shape is skewed to the right, with a longer tail on the higher value side, indicating the presence of outliers or a non-normal distribution.
+-   The peak of the distribution appears to be around the 50-100 range, suggesting this is where most of the data points lie.
+
+# 1)b)
+
+```{r}
+set.seed(123)
+selected_points <- Netherlands[sample(1:nrow(Netherlands), 5), ]
+selected_points
+```
+
+```{r}
+selected_points_data <- data.frame(
+  name = rownames(selected_points),
+  longitude = selected_points$longitude,
+  latitude = selected_points$latitude,
+  precipitation = selected_points$precip
+)
+print(selected_points_data)
+```
+
+```{r}
+# Remove these from your training dataset
+set.seed(123)
+df_train <- Netherlands[-sample(1:nrow(Netherlands), 5), ]
+
+```
+
+```{r}
+train_data <- as.geodata(df_train,coords.col = 2:3,data.col = 4)
+plot.geodata(train_data, coords = train_data$coords, data = train_data$data,)
+
+```
+
+# 1)c)
+
+```{r}
+sample_vario1 <- variog(train_data, option='bin')
+par(mar=c(4,4,2,2))
+plot(sample_vario1, pch = 19)
+```
+
+-   After analysing the variogram plot provided above, we can conclude that the plotted points show a positive trend initially, followed by a decrease at a specific point. Based on this analysis, we can infer that the data's upward trend appears to plateau at a distance of 2, indicating that this distance can be considered as the maximum range.
+
+```{r}
+sample_vario1$n
+```
+
+```{r}
+sample_vario <- variog(train_data, option='bin', max.dist = 2)
+par(mar=c(4,4,2,2))
+plot(sample_vario, pch = 19)
+```
+
+```{r}
+vari.default <- variofit(sample_vario)
+par(mar=c(4,4,2,2))
+plot(sample_vario, pch = 19)
+lines(vari.default)
+```
+- After analyzing the sample vario and default fit of the variofit function, it is noticeable that the fitted line does not originate from the origin and there is a gap before the actual fit. Additionally, it is expected that a curve plotted should pass through all possible points. Hence, it is necessary to determine a nugget value by closely observing the fitted plot, as even a slight variation in distance on the semivariance axis can be considered as the desired nugget value.
+
+- Based on the plot we have choosen **nugget value as 150**.
+
+```{r}
+vari.default1 <- variofit(sample_vario,nugget = 150,fix.nugget = TRUE)
+par(mar=c(4,4,2,2))
+plot(sample_vario, pch = 19)
+lines(vari.default1)
+```
+
+```{r}
+vari.default2 <- variofit(sample_vario,nugget = 150,fix.nugget = TRUE,cov.model = 'gaussian')
+
+par(mar=c(4,4,2,2))
+plot(sample_vario, pch = 19)
+lines(vari.default2)
+```
+
+```{r}
+vari.default3 <- variofit(sample_vario,nugget = 150,fix.nugget = TRUE,cov.model = 'exponential')
+
+par(mar=c(4,4,2,2))
+plot(sample_vario, pch = 19)
+lines(vari.default3)
+```
+
+```{r}
+vari.default4 <- variofit(sample_vario,nugget = 150,fix.nugget = TRUE,cov.model = 'spherical')
+
+par(mar=c(4,4,2,2))
+plot(sample_vario, pch = 19)
+lines(vari.default4)
+```
+- After experimenting with various assumptions of the variofit function, ranging from "matern" to "exponential", and setting the nugget value to 150, I determined that the ***Gaussian model*** was the best fit model (vario.default2) by analyzing the weighted least square values of each model.
+
+- I kept the mean/trend values ***constant*** since setting them as "1st" or "2nd" order resulted in a ***sigmasq value of zero (0)***.
+
+```{r}
+xv.ml <- xvalid(train_data, model = vari.default2)
+par(mfrow=c(3,2),mar=c(4,2,2,2))
+plot(xv.ml, error = TRUE, std.error = FALSE, pch = 19)
+
+```
+- We see that there is a relatively strong relationship between the fitted and true values (top left).
+
+- The histogram plot shows a normal distribution.
+
+- The residual plots have some kind of similar pattern this suggests the good model fit.
+
+
+# 1)d)
+
+```{r}
+vari.default2$cov.pars
+```
+
+```{r}
+model_ml0 <- likfit(train_data,ini.cov.pars = c(1742.63, 1.23), cov.model = 'spherical')
+model_ml0
+```
+```{r}
+xv.ml3 <- xvalid(train_data, model = model_ml0)
+par(mfrow=c(3,2),mar=c(4,2,2,2))
+plot(xv.ml3, error = TRUE, std.error = FALSE, pch = 19)
+```
+
+```{r}
+gp_model <- likfit(train_data, cov.model = "spherical", nugget = 150, ini.cov.pars = c(300, 1), fix.nugget = TRUE)
+gp_model
+```
+
+```{r}
+xv.ml00 <- xvalid(train_data, model = gp_model)
+par(mfrow=c(3,2),mar=c(4,2,2,2))
+plot(xv.ml00, error = TRUE, std.error = FALSE, pch = 19)
+```
+
+```{r}
+model_trend0 <- likfit(train_data, trend = '1st', ini.cov.pars = c(1742.63, 1.23), cov.model = 'matern',kappa = 5/2)
+model_trend0
+```
+
+```{r}
+xv.ml0 <- xvalid(train_data, model = model_trend0)
+par(mfrow=c(3,2),mar=c(4,2,2,2))
+plot(xv.ml0, error = TRUE, std.error = FALSE, pch = 19)
+```
+
+```{r}
+model_trend <- likfit(train_data, trend = '2nd', ini.cov.pars = c(1742.63, 1.23), cov.model = 'matern',kappa = 5/2)
+model_trend
+```
+
+```{r}
+xv.ml1 <- xvalid(train_data, model = model_trend)
+par(mfrow=c(3,2),mar=c(4,2,2,2))
+plot(xv.ml1, error = TRUE, std.error = FALSE, pch = 19)
+```
+- After conducting an analysis and reviewing the residual plots, I have concluded that model_trend0 is the best-fitted model due to its significantly lower max log likelihood value. As for the parameter assumptions, I have selected a trend of '1st' and a kappa value of 5/2, with the cov.model being matern.
+
+
+# 1)e)
+
+```{r}
+ex.grid <- as.matrix(expand.grid(seq(0,1,l=21), seq(0,1,l=21)))
+ex.bayes <- krige.bayes(geodata = train_data, loc=ex.grid,
+model = model.control(cov.m="gaussian"),
+prior = prior.control(phi.discrete=seq(0, 1, l=71),
+phi.prior="reciprocal"))
+```
+
+```{r}
+summary(ex.bayes$posterior$sample)
+```
+
+```{r}
+summary(ex.bayes$predictive$mean)
+```
+
+```{r}
+summary(ex.bayes$predictive$variance)
+```
+
+```{r}
+dim(ex.bayes$predictive$simulations)
+```
+
+```{r}
+par(mar=c(4,4,2,2))
+plot(ex.bayes, type="h", tausq.rel = FALSE, col=c("red", "blue"))
+```
+
+-we can see that the data has led to a posterior distribution with a peak relatively close to the true value that we used to generate the field.length φ, with the posterior containing a wide range of values (from around 0.02 to 0.17), although a large
+amount of the density is around 0.02. 
+
+```{r}
+par(mfrow=c(1,3), mar=c(4,4,2,2))
+hist(ex.bayes, breaks = 50)
+
+```
+
+# 1)f)
+
+```{r}
+op <- par(no.readonly = TRUE)
+par(mfrow=c(2,2), mar=c(4,4,2.5,0.5), mgp = c(2,1,0))
+image(ex.bayes, main="predicted values")
+image(ex.bayes, val="variance", main="prediction variance")
+image(ex.bayes, val= "simulation", number.col=1,
+      main="simulation 1")
+image(ex.bayes, val= "simulation", number.col=2,
+      main="simulation 2")
+#
+par(op)
+```
+
+
+- Here we have the posterior mean and variance, as well as two individual simulations from the posterior.
+- Here, each simulation is based on a different sample from the posterior distribution.
+
+
+```{r}
+selected_points_df <- as.geodata(selected_points,coords.col = 2:3,data.col = 4)
+selected_points_df
+```
+
+```{r}
+# Using kriging model
+pred_grid <- expand.grid(seq(100, 800, by = 5), seq(0, 550, by = 5))
+# obj.model is the model we want to use for prediction
+preds <- krige.conv(selected_points_df, loc=pred_grid,
+krige=krige.control(obj.model=vari.default2))
+image(preds, col = viridis::viridis(100), zlim = c(0,max(c(preds$predict))),
+coords.data = train_data[1]$coords, main = 'Mean', xlab = 'x', ylab = 'y',
+x.leg = c(700, 900), y.leg = c(20, 70))
+image(preds, values = preds$krige.var, col = heat.colors(100)[100:1],
+zlim = c(0,max(c(preds$krige.var))), coords.data = train_data[1]$coords,
+main = 'Variance', xlab = 'x', ylab = 'y', x.leg = c(700, 900), y.leg = c(20, 70))
+```
+
+```{r}
+# Using Gaussian Process model
+pred_grid <- expand.grid(seq(100, 800, by = 5), seq(0, 550, by = 5))
+# obj.model is the model we want to use for prediction
+preds <- krige.conv(selected_points_df, loc=pred_grid,
+krige=krige.control(obj.model=model_ml0))
+image(preds, col = viridis::viridis(100), zlim = c(0,max(c(preds$predict))),
+coords.data = train_data[1]$coords, main = 'Mean', xlab = 'x', ylab = 'y',
+x.leg = c(700, 900), y.leg = c(20, 70))
+image(preds, values = preds$krige.var, col = heat.colors(100)[100:1],
+zlim = c(0,max(c(preds$krige.var))), coords.data = train_data[1]$coords,
+main = 'Variance', xlab = 'x', ylab = 'y', x.leg = c(700, 900), y.leg = c(20, 70))
+```
+
+------------------------------------------------------------------------
+
+# 2.
+
+```{r}
+library(TSA)
+library(forecast)
+library(tseries)
+```
+
+# 2)a)
+
+```{r}
+# Load the dataset
+gst_anom <- read.csv("D:/ADIL/Downloads/data/gst_anom.csv")
+```
+
+```{r}
+head(gst_anom)
+```
+
+```{r}
+gst_anom_ts=ts(gst_anom[,3],start=c(1850,1),end=c(2023,12),frequency=12)
+```
+
+```{r}
+ggplot(gst_anom, aes(x = as.Date(paste(Year, Month, "01", sep = "-")), y = Anomaly)) +
+  geom_line() +
+  labs(title = "Global Surface Temperature Anomaly", 
+       x = "Year", y = "Temperature Anomaly (°C)") +
+  theme_minimal()
+```
+
+- The plotted data represents the Global Surface Temperature Anomaly over a period starting from approximately 1850 to 2023. 
+
+- During the latter part of the 20th century and extending into the 21st century, there is a noticeable upward trend in global surface temperature anomaly. This aligns with the widely accepted scientific consensus that global warming and climate change are driven by human activities such as burning fossil fuels. 
+
+The fastest increase in the temperature anomaly appears to have occurred in the last few decades, with recent years experiencing record-high temperature anomalies. This rapid warming aligns with the increase in greenhouse gas emissions and climate models projecting accelerated warming in the present era. Before the late 20th century, the temperature anomaly fluctuated around a relatively stable baseline, with occasional spikes that may be linked to natural events or measurement uncertainties in the early observational record.
+
+The plot illustrates that the global temperature anomaly has varied between approximately -1.0°C to over 1.5°C in comparison to the baseline period, emphasizing the significant impact even small temperature changes can have on the global climate system.
+
+
+```{r}
+#creating a dataframe strating from 1990 and creating time sereis data
+df_1990_onwards <- subset(gst_anom, Year >= 1990)
+ts_data <- ts(df_1990_onwards$Anomaly, start = c(1990, 1), frequency = 12)
+```
+
+```{r}
+ts.plot(ts_data)
+```
+
+```{r}
+# check for the stationarity
+adf.test(ts_data) ## p<0.05, The time series is stationary.
+```
+- Based on the test reults we can say that the data is has stationarity since p-value <0.05.
+
+```{r}
+ggplot(data = gst_anom, aes(x = Anomaly)) +
+  geom_histogram(bins = 30) + labs(title = "Histogram")
+```
+
+# 2)b)
+
+```{r}
+par(mfrow=c(1,2),mar=c(4,2,4,2))
+acf(ts_data, main = 'ACF')
+pacf(ts_data, main = 'PACF')
+```
+
+- Upon examination of the ACF and PACF plots of the ts_data, it can be determined that while the ACF plot displays a gradually decreasing lag value, it remains stable overall. However, there is no discernible cut-off point present in the ACF plot, hence we take 0. As for the PACF plot, a clear cut-off value of 1 can be observed.
+
+- ACF indicates the q values in the order of p,d,q and it is a moving average(MA).
+
+- PACF indicates the p values in the order of p,d,q and it is a Auto regression (AR).
+
+- since we need to perform the ARMA and ARIMA without the seasonality we have cosnider seasonal as FALSE.
+
+
+
+#ARMA MODEL
+
+```{r}
+arma_model1 <- Arima(ts_data, order = c(1,0,0))
+arma_model1
+```
+```{r}
+tsdiag(arma_model1)
+```
+
+
+```{r}
+arma_model2 <- Arima(ts_data, order = c(2,0,0))
+arma_model2
+```
+```{r}
+tsdiag(arma_model2)
+```
+
+
+```{r}
+arma_model3 <- Arima(ts_data, order = c(1,0,1))
+arma_model3
+```
+```{r}
+tsdiag(arma_model3)
+```
+
+```{r}
+arma_model4 <- Arima(ts_data, order = c(2,0,1))
+arma_model4
+```
+
+```{r}
+tsdiag(arma_model4)
+```
+- ARMA model do not have any difference term so I have taken d=0 for the all the ARMA model fits.
+
+- After analyzing the models with different p and q values with maximum p value of 2 and maximum q value of 1.
+
+- AIC plays a vital role in deciding the best model. However, we cannot rely on only AIC values so we should also consider the residual plots and the S.E values of the model fit.
+
+- after looking at the residual plots and the lowest AIC and BIC values i have assumed the best fit model as ARMA(2,0,1). where AIC = -617.84 and log-likelihood = 313.92
+
+
+#ARIMA MODEL
+
+```{r}
+model_arima <- Arima(ts_data, order = c(1,1,1), include.drift = TRUE)
+model_arima
+```
+```{r}
+tsdiag(model_arima)
+```
+
+```{r}
+model_arima1 <- Arima(ts_data, order = c(2,1,1), include.drift = TRUE)
+model_arima1
+```
+```{r}
+tsdiag(model_arima1)
+```
+
+
+```{r}
+model_arima2 <- Arima(ts_data, order = c(1,1,2), include.drift = TRUE)
+model_arima2
+```
+```{r}
+tsdiag(model_arima2)
+```
+
+```{r}
+model_arima4 <- Arima(ts_data, order = c(2,1,2), include.drift = TRUE)
+model_arima4
+```
+
+```{r}
+tsdiag(model_arima4)
+```
+- ARIMA model can take difference value term so I have taken d=1 for the all the ARIMA model fits.
+
+- After analyzing the models with different p and q values with maximum p & q values of 2 and maximum d value of 1.
+
+- AIC plays a vital role in deciding the best model. However, we cannot rely on only AIC values so we should also consider the residual plots and the S.E values of the model fit.
+
+- after looking at the residual plots and the lowest AIC and BIC values i have assumed the best fit model as ARIMA(2,1,2). where the AIC =-641.02 and log-likelihood = 326.51
+
+
+#2c)
+
+```{r}
+# aggregating teh data from monthly to quarterly data by the average method
+ts_data_quarterly <- aggregate(ts_data, nfrequency = 4, FUN = mean)
+ts_data_quarterly
+```
+
+```{r}
+par(mar=c(4,4,2,2)); ts.plot(ts_data_quarterly)
+```
+
+```{r}
+par(mfrow=c(1,2))
+plot(diff(ts_data_quarterly), main = '1st difference')
+plot(diff(ts_data_quarterly, lag = 4), main = 'Seasonal difference')
+```
+
+```{r}
+par(mfrow=c(1,2), mar=c(4,4,2,2))
+acf(diff(ts_data_quarterly, lag = 4), main = 'ACF')
+pacf(diff(ts_data_quarterly, lag = 4), main = 'PACF')
+```
+
+```{r}
+mod <- auto.arima(diff(ts_data_quarterly, lag = 4))
+mod
+```
+
+```{r}
+tsdiag(mod)
+```
+
+```{r}
+#SARIMA MODEL
+mod1 <- auto.arima(ts_data_quarterly, seasonal = TRUE)
+mod1
+```
+```{r}
+tsdiag(mod1)
+```
+
+
+```{r}
+#ARIMA MODEL
+mod2 <- Arima(ts_data_quarterly, order = c(2,1,2), include.drift = TRUE)
+mod2
+```
+
+```{r}
+tsdiag(mod2)
+```
+
+
+
+```{r}
+#ARMA MODEL
+mod3 <- Arima(ts_data_quarterly, order = c(2,0,1))
+mod3
+```
+
+```{r}
+tsdiag(mod3)
+```
+
+```{r}
+mod4 <- auto.arima(ts_data_quarterly, max.p = 2, max.q = 2, max.d = 0, seasonal = FALSE)
+mod4
+```
+```{r}
+tsdiag(mod4)
+```
+
+```{r}
+mod5 <- arima(ts_data_quarterly, order = c(1,1,0),seasonal = list(order= c(1,0,0),period = 12),include.mean = FALSE)
+mod5
+```
+
+```{r}
+tsdiag(mod5)
+```
+
+
+```{r}
+#SARIMA MODEL
+mod6 <- auto.arima(ts_data_quarterly,trace = TRUE)
+```
+
+```{r}
+mod6
+```
+```{r}
+tsdiag(mod6)
+```
+
+- Fitting a ARMA, ARIMA and SARIMA models on the quarterly dataset.
+
+- After analyzing the models with different p and q values with maximum p & q values of 2 and maximum d value of 1. Taking number of lags/ seasonal period = 4
+
+- AIC plays a vital role in deciding the best model. However, we cannot rely on only AIC values so we should also consider the residual plots and the S.E values of the model fit.
+
+- after looking at the residual plots and the lowest AIC and BIC values i have assumed the best fit model as ARIMA(0,1,0)(1,0,1)[4] with the AIC =-217.9 and log-likelihood = 111.95 and ARIMA(2,1,2) with log likelihood = 119.69and AIC=-227.37 
+
+- We have 2 models one with without seasonal and another is with seasonal for the quarterly data.
+
+# 2)d)
+
+```{r}
+library(dlm)
+```
+
+# Quarterly data
+
+```{r}
+buildFun <- function(x) {
+dlmModPoly(order = 2, dV = exp(x[1]), dW = c(0, exp(x[2]))) +
+dlmModSeas(frequency = 4, dV = 0, dW = c(exp(x[3]), rep(0,2)))
+}
+```
+
+```{r}
+fit_q <- dlmMLE(ts_data_quarterly, parm = c(0,0,0), build = buildFun)
+fit_q$par
+```
+
+```{r}
+fitted_model_q <- buildFun(fit_q$par)
+V(fitted_model_q)
+
+```
+
+```{r}
+W(fitted_model_q)
+```
+
+```{r}
+fitted_model_q
+```
+
+# Monthly data
+
+```{r}
+buildFun_m <- function(x) {
+dlmModPoly(order = 2, dV = exp(x[1]), dW = c(0, exp(x[2]))) +
+dlmModSeas(frequency = 4, dV = 0, dW = c(exp(x[3]), rep(0,2)))
+}
+```
+
+```{r}
+fit_m <- dlmMLE(ts_data, parm = c(0,0,0), build = buildFun_m)
+fit_m$par
+```
+
+```{r}
+fitted_model_m <- buildFun(fit_m$par)
+V(fitted_model_m)
+
+```
+
+```{r}
+W(fitted_model_m)
+```
+
+
+# 2)e)
+
+# Forecasting quaterly data
+
+```{r}
+anom_quaterly <- dlmFilter(ts_data_quarterly, mod = fitted_model_q)
+summary(anom_quaterly)
+```
+
+```{r}
+x <- cbind(ts_data_quarterly, dropFirst(anom_quaterly$a[,c(1,3)]))
+x <- window(x, start = c(1990,12))
+colnames(x) <- c("Anomaly", "Trend", "Seasonal")
+plot(x, type = 'o', main = "global surface temperature anomaly")
+```
+
+```{r}
+AnomFore <- dlmForecast(anom_quaterly, nAhead = 12)
+summary(AnomFore)
+
+```
+
+```{r}
+dim(AnomFore$a)
+
+```
+
+```{r}
+dim(AnomFore$f)
+
+```
+
+```{r}
+sqrtR <- sapply(AnomFore$R, function(x) sqrt(x[1,1]))
+pl <- AnomFore$a[,1] + qnorm(0.025, sd = sqrtR)
+pu <- AnomFore$a[,1] + qnorm(0.975, sd = sqrtR)
+x <- ts.union(window(ts_data_quarterly, start = c(1990, 12)),
+AnomFore$a[,1],
+AnomFore$f, pl, pu)
+par(mar=c(4,4,2,2))
+plot(x, plot.type = "single", type = 'o', pch = c(1, 12, 3, NA, NA),
+col = c("darkgrey", "brown", "brown", "blue", "blue"),
+ylab = "Log global surface temperature",ylim = c(0.001, 3))
+legend("bottomright", legend = c("Observed",
+"Forecast", "95% interval"),
+bty = 'n', pch = c(1, 12, NA), lty = 1,
+col = c("darkgrey", "brown", "blue"))
+
+```
+
+- The forecast of the quarterly data by dlm model shows the increasing trend in the year 2024.However, the 95% confidence interval values are not plotted correct which tells that data has some uncertainty.
+
+```{r}
+par(mar=c(4,4,2,2));tsdiag(anom_quaterly)
+```
+
+# Forecasting monthly data
+
+```{r}
+anom_monthly <- dlmFilter(ts_data, mod = fitted_model_m)
+summary(anom_monthly)
+```
+
+```{r}
+x <- cbind(ts_data, dropFirst(anom_monthly$a[,c(1,3)]))
+x <- window(x, start = c(1990,12))
+colnames(x) <- c("Anomaly", "Trend", "Seasonal")
+plot(x, type = 'o', main = "global surface temperature anomaly")
+```
+
+```{r}
+AnomFore_m <- dlmForecast(anom_monthly, nAhead = 12)
+summary(AnomFore_m)
+
+```
+
+```{r}
+dim(AnomFore_m$a)
+
+```
+
+```{r}
+dim(AnomFore_m$f)
+
+```
+
+```{r}
+sqrtR <- sapply(AnomFore_m$R, function(x) sqrt(x[1,1]))
+pl <- AnomFore_m$a[,1] + qnorm(0.025, sd = sqrtR)
+pu <- AnomFore_m$a[,1] + qnorm(0.975, sd = sqrtR)
+x <- ts.union(window(ts_data, start = c(1990, 2)),
+AnomFore_m$a[,1],
+AnomFore_m$f, pl, pu)
+par(mar=c(4,4,2,2))
+plot(x, plot.type = "single", type = 'o', pch = c(1, 12, 3, NA, NA),
+col = c("darkgrey", "brown", "brown", "blue", "blue"),
+ylab = "Log global surface temperature",ylim = c(0.0001, 2))
+legend("bottomright", legend = c("Observed",
+"Forecast", "95% interval"),
+bty = 'n', pch = c(1, 12, NA), lty = 1,
+col = c("darkgrey", "brown", "blue"))
+
+```
+- The forecast of the monthly data by dlm model shows a slight increasing trend in the year 2024.
+
+```{r}
+par(mar=c(4,4,2,2));tsdiag(anom_monthly)
+```
+
+# Forecasting of best ARIMA model of c) 
+
+```{r}
+forecast1 = forecast(mod2, 4)
+forecast1
+```
+
+```{r}
+plot(forecast1)
+```
+- The forecast of the data by ARIMA model taking difference shows the decreasing trend in the year 2024.
+
+```{r}
+forecast2 = forecast(mod6, 4)
+forecast2
+plot(forecast2)
+```
+- The forecast of the data by SARIMA model with the seasonal term we can observe that there are fluctuations in the year 2024 of model prediction but overall we can see a positive trend in the model.
+
+
+# Forecasting of best ARIMA model of b) 
+
+```{r}
+forecast3 = forecast(model_arima4, 12)
+forecast3
+```
+
+```{r}
+plot(forecast3)
+```
+- The forecast of the data by ARIMA(2,1,2) model taking difference shows the decreasing trend in the year 2024.
+
+
+# 3)a)
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(sp)
+library(gstat)
+library(fields)
+```
+
+```{r}
+uk_loc <- read.csv("D:/ADIL/Downloads/data/uk_loc.csv")
+```
+
+```{r}
+uk_temp <- read.csv("D:/ADIL/Downloads/data/uk_temp.csv",stringsAsFactors = FALSE)
+```
+
+```{r}
+# Convert uk_temp to long format and merge with uk_loc
+new_uk_temp <- pivot_longer(uk_temp, cols = -Date, names_to = "station_name", values_to = "max_temp")
+new_uk_temp$Date <- as.Date(new_uk_temp$Date, format = "%Y-%m-%d")
+```
+
+```{r}
+uk_data <- merge(uk_loc,new_uk_temp,by='station_name')
+```
+
+```{r}
+library(ggplot2)
+```
+
+# a. Spatial and time series plots
+
+```{r}
+# Time series plot for each location
+ggplot(uk_data, aes(x = Date, y = max_temp, group = station_name, color = station_name)) +
+  geom_line() +
+  labs(title = "Time Series of Maximum Daily Temperatures for Each Location", x = "Date", y = "Temperature (°C)") +
+  theme(legend.position = "right")
+```
+This plot shows the maximum daily temperatures for different locations in the UK throughout the year 2022 in a time series format.
+
+- Seasonal trends can be observed in the plot, with temperatures reaching their peak during the summer months (around July and August 2022) and dropping to lower values in the winter months. While the seasonal pattern is consistent across all locations, there are noticeable differences in temperature ranges and peak values.
+
+- Each location exhibits significant day-to-day variability in maximum temperatures, with some days experiencing much higher or lower temperatures than the surrounding days. The plot highlights potential extreme temperature events such as heatwaves or cold snaps, where maximum temperatures for multiple locations spike or dip significantly compared to the typical range. These events could have implications for sectors like agriculture, energy demand, or public health.
+
+
+```{r}
+# Spatial plot
+ggplot(uk_data, aes(x = station_longitude, y = station_latitude, color = max_temp)) +
+  geom_point(aes(size = max_temp)) +
+  labs(title = "Spatial Distribution of Maximum Temperatures on 2022-07-24", x = "Longitude", y = "Latitude") +
+  scale_color_gradient(low = "blue", high = "red") +
+  theme_minimal()
+```
+
+This plot presents the spread of maximum temperatures across various locations on July 24th, 2022.
+
+- The plot exhibits maximum temperatures that vary from 0°C (represented by black circles) to 40°C (represented by the largest pink circles). The wide range indicates significant temperature differences among various places on that specific day.
+
+- The larger pink circles, representing higher maximum temperatures, seem to cluster around a central area, while the smaller black circles, representing lower maximum temperatures, are more dispersed around the edges. This phenomenon could indicate the presence of a high-temperature region or hotspot.
+
+- Some isolated large pink circles, representing locations with maximum temperatures of roughly 40°C, appear distinct from the primary cluster. These could be potential outliers or locations with remarkably high temperatures on that day.
+
+```{r}
+str(uk_data)
+```
+
+# 3)b)
+
+```{r}
+july24_data <- new_uk_temp %>% filter(Date == "2022-07-24") %>% left_join(uk_loc, by = c("station_name" = "station_name"))
+```
+
+```{r}
+geo_data <- as.geodata(july24_data, coords.col = 4:5, data.col = 6)
+```
+
+
+```{r}
+gp_mod <- likfit(geo_data, cov.model = "spherical", ini.cov.pars = c(900, 1.5))
+gp_mod
+xv.m1 <- xvalid(geo_data, model = gp_mod)
+par(mfrow=c(3,2),mar=c(4,2,2,2))
+plot(xv.m1, error = TRUE, std.error = FALSE, pch = 19)
+```
+```{r}
+gp_mod1 <- likfit(geo_data, cov.model = "gaussian", ini.cov.pars = c(900, 1.5))
+gp_mod1
+xv.m2 <- xvalid(geo_data, model = gp_mod1)
+par(mfrow=c(3,2),mar=c(4,2,2,2))
+plot(xv.m2, error = TRUE, std.error = FALSE, pch = 19)
+```
+
+
+```{r}
+gp_model <- likfit(geo_data, cov.model = "matern", ini.cov.pars = c(900, 1.5), kappa = 3/2)
+gp_model
+```
+
+```{r}
+xv.ml <- xvalid(geo_data, model = gp_model)
+par(mfrow=c(3,2),mar=c(4,2,2,2))
+plot(xv.ml, error = TRUE, std.error = FALSE, pch = 19)
+```
+
+```{r}
+target_locs <- uk_loc %>% filter(station_name %in% c("Wallington", "Reading", "Whitby"))
+```
+
+```{r}
+predictions <- krige.conv(geo_data, loc = target_locs[, c("station_longitude", "station_latitude")], krige=krige.control(obj.model=gp_model))
+predictions
+```
+
+# 3)c)
+
+```{r}
+# For plotting mean and variance over a grid, we'll create a prediction grid
+pred_grid <- expand.grid(seq(min(uk_data$station_longitude), max(uk_data$station_longitude), by =0.05), seq(min(uk_data$station_latitude), max(uk_data$station_latitude), by = 0.05))
+```
+
+```{r}
+# Convert grid data to geodata format for prediction 
+grid_geodata <- as.geodata(pred_grid, coords.col = 1:2, data.col = 2)
+```
+
+
+***below codes runs slow and it takes long time.**
+
+```{r}
+# Predict over the grid
+#grid_predictions <- krige.conv(grid_geodata, loc = grid_geodata$coords, krige=krige.control(obj.model=gp_model))
+```
+
+```{r}
+#grid_predictions
+```
+
+```{r}
+# Convert predictions to a data frame for plotting 
+#grid_predictions_df <- as.data.frame(grid_predictions) 
+#colnames(grid_predictions_df) <- c("longitude", "latitude", "predicted_mean", "predicted_variance")
+```
+
+```{r}
+# Plotting 
+#ggplot(grid_predictions_df, aes(x = longitude, y = latitude)) + geom_tile(aes(fill = predicted_mean)) + geom_point(data = uk_loc, aes(x = longitude, y = latitude, color = "red")) + labs(title = "Predicted Mean Temperatures", x = "Longitude", y = "Latitude", fill = "Temperature (°C)")
+```
+
+```{r}
+#ggplot(grid_predictions_df, aes(x = longitude, y = latitude)) + geom_tile(aes(fill = predicted_variance)) + geom_point(data = uk_loc, aes(x = longitude, y = latitude, color = "red")) + labs(title = "Variance of Predicted Temperatures", x = "Longitude", y = "Latitude", fill = "Variance") 
+```
+
+# 3)d). Time series models for forecasts
+
+```{r}
+# Subset data for Fair Isle
+fair_isle_data <- subset(uk_data, station_name == "Fair_Isle")
+# Preprocess the data
+fair_isle_ts <- ts(fair_isle_data$max_temp, frequency = 365)
+fair_isle_ts
+```
+
+```{r}
+# Explore the data
+plot(fair_isle_ts, main = "Maximum Daily Temperature in Fair Isle")
+```
+
+```{r}
+par(mfrow=c(1,2),mar=c(4,2,4,2))
+acf(fair_isle_ts, main = 'ACF')
+pacf(fair_isle_ts, main = 'PACF')
+```
+
+```{r}
+fit_fair_isle <- Arima(fair_isle_ts, order = c(1,0,1))
+fit_fair_isle
+```
+
+```{r}
+fit_fair_isle1 <- Arima(fair_isle_ts, order = c(2,0,1))
+fit_fair_isle1
+```
+
+```{r}
+fit_fair_isle2 <- Arima(fair_isle_ts, order = c(1,1,1))
+fit_fair_isle2
+```
+
+```{r}
+fit_fair_isle3 <- Arima(fair_isle_ts, order = c(2,0,2))
+fit_fair_isle3
+```
+
+```{r}
+# Forecast
+forecast_fair_forecast <- forecast(fit_fair_isle3, h = 5)
+
+# Print the forecast
+print(forecast_fair_forecast)
+```
+
+```{r}
+forecast_fair_isle <- predict(fit_fair_isle3, n.ahead = 5)
+forecast_fair_isle
+```
+
+```{r}
+plot(forecast_fair_forecast)
+```
+- The forecasted temperatures shows fluctuation and finally a decrease trend from May 1st to May 5th, 2022.
+
+May 1st: 9.91405°C
+May 2nd: 10.70°C
+May 3rd: 10.93°C
+May 4th: 10.3°C
+May 5th: 10.03°C
+
+The standard errors (se) for these forecasted values are:
+    
+May 1st: 3.130977
+May 2nd: 3.156245
+May 3rd: 3.162815
+May 4th: 3.177576
+May 5th: 3.184449
+
+- The forecasted values suggest that the maximum temperatures in Bridlington during this period are expected to be around 9.5-11°C, which seems reasonable for early may in that location. The forecasts are quite similar to the original data.
+
+```{r}
+# Subset data for Bridlington
+bridlington_data <- subset(uk_data, station_name == "Bridlington")
+# Preprocess the data
+bridlington_ts <- ts(bridlington_data$max_temp, frequency = 365)
+bridlington_ts
+```
+
+```{r}
+# Explore the data
+plot(bridlington_ts, main = "Maximum Daily Temperature in Bridlington")
+```
+
+```{r}
+par(mfrow=c(1,2),mar=c(4,2,4,2))
+acf(bridlington_ts, main = 'ACF')
+pacf(bridlington_ts, main = 'PACF')
+```
+
+```{r}
+
+bridlington_model <- Arima(bridlington_ts, order = c(1,1,1))
+bridlington_model
+```
+
+```{r}
+
+bridlington_model1 <- Arima(bridlington_ts, order = c(1,0,2))
+bridlington_model1
+```
+
+```{r}
+
+bridlington_model2 <- Arima(bridlington_ts, order = c(2,0,2))
+bridlington_model2
+```
+
+```{r}
+
+bridlington_model3 <- Arima(bridlington_ts, order = c(2,1,2))
+bridlington_model3
+```
+
+```{r}
+# Forecast
+bridlington_forecast <- forecast(bridlington_model, h = 5)
+
+# Print the forecast
+print(bridlington_forecast)
+```
+
+```{r}
+bridlington_model_pred <- predict(bridlington_model, n.ahead = 5)
+bridlington_model_pred
+```
+
+```{r}
+plot(bridlington_forecast)
+```
+- The forecasted temperatures show a slight increase from October 31st to November 4th, 2022. However, the changes are relatively small.
+
+
+October 31st: 11.46°C
+November 1st: 11.74°C
+November 2nd: 11.78°C
+November 3rd: 11.78°C
+November 4th: 11.79°C
+
+The standard errors (se) for these forecasted values are:
+
+October 31st: 5.44
+November 1st: 5.50
+November 2nd: 5.51
+November 3rd: 5.51
+November 4th: 5.51
+
+- The forecasted values suggest that the maximum temperatures in Bridlington during this period are expected to be around 11-12°C, which seems reasonable for early November in that location.
+
+However, it's important to note that the standard errors are relatively high, indicating a significant level of uncertainty in these forecasts. The wide forecast intervals imply that the actual maximum temperatures could deviate substantially from the predicted values.
